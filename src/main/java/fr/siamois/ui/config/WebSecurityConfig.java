@@ -10,7 +10,9 @@ import fr.siamois.ui.config.security.jwt.JwtService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +26,13 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configurers.CorsConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Configuration class for the security of the application.
@@ -80,11 +89,52 @@ public class WebSecurityConfig {
      * (Bearer JWT), pas sur un cookie de session. Le filtre web ({@link #webSecurityFilterChain})
      * conserve la protection CSRF pour l'application JSF (formulaires avec jeton {@code _csrf}).
      */
+    /**
+     * Origines autorisées à appeler l'API v1 depuis un navigateur, séparées par des virgules.
+     * Vide par défaut : en production le SPA est servi par le même hôte que l'API, et en
+     * développement il passe par le proxy Vite — dans les deux cas la requête est en même origine
+     * et aucun CORS n'est nécessaire. Ne renseigner que pour un front servi depuis une autre origine.
+     */
+    @Value("${siamois.api.cors.allowed-origins:}")
+    private String[] apiAllowedOrigins;
+
+    /**
+     * L'API v1 s'authentifie par en-tête {@code Authorization}, jamais par cookie : les identifiants
+     * de navigateur ne sont donc pas autorisés, et les origines sont listées explicitement — jamais
+     * de {@code *}, qui exposerait l'API à n'importe quel site.
+     */
+    private Customizer<CorsConfigurer<HttpSecurity>> apiCors() {
+        if (apiAllowedOrigins == null || apiAllowedOrigins.length == 0) {
+            return AbstractHttpConfigurer::disable;
+        }
+        List<String> origins = Arrays.stream(apiAllowedOrigins)
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty() && !"*".equals(origin))
+                .toList();
+        if (origins.isEmpty()) {
+            return AbstractHttpConfigurer::disable;
+        }
+
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT_LANGUAGE));
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(Duration.ofMinutes(30));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/v1/**", configuration);
+        log.info("CORS activé sur /api/v1/** pour les origines {}", origins);
+        return cors -> cors.configurationSource(source);
+    }
+
     @Bean
     @Order(1)
     public SecurityFilterChain apiV1SecurityFilterChain(HttpSecurity http,
                                                         JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http.securityMatcher("/api/v1/**")
+                .cors(apiCors())
                 .csrf(csrfDisabled())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

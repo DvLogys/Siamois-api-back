@@ -1,5 +1,6 @@
 package fr.siamois.ui.api.openapi.v1.service;
 
+import fr.siamois.domain.models.ValidationStatus;
 import fr.siamois.domain.models.UserInfo;
 import fr.siamois.domain.models.exceptions.permission.ForbiddenOperationException;
 import fr.siamois.domain.models.vocabulary.Concept;
@@ -57,6 +58,12 @@ public class PhaseApiService {
 
         PhaseDTO phase = new PhaseDTO();
         phase.setActionUnit(toSummary(project));
+        // `PhaseService.save` ne renseigne pas la traçabilité : dans le JSF c'est l'appelant qui la
+        // pose (cf. GenericNewUnitDialogBean, EntityFormContext). Sans ça, `createdBy` viole son
+        // @NotNull au moment du persist.
+        phase.setCreatedBy(caller.person());
+        phase.setCreatedByInstitution(project.getCreatedByInstitution());
+        phase.setValidated(ValidationStatus.INCOMPLETE);
         applyRequest(phase, request, true);
 
         return toResource(savePhase(caller, project, phase), lang);
@@ -162,9 +169,14 @@ public class PhaseApiService {
         return concepts;
     }
 
+    // Le générateur d'identifiant lit `fullIdentifier` de l'unité d'action (jeton ID_UA) :
+    // un résumé réduit à l'identifiant technique ne suffit pas.
     private ActionUnitSummaryDTO toSummary(ActionUnitDTO project) {
         ActionUnitSummaryDTO summary = new ActionUnitSummaryDTO();
         summary.setId(project.getId());
+        summary.setIdentifier(project.getIdentifier());
+        summary.setFullIdentifier(project.getFullIdentifier());
+        summary.setCreatedByInstitution(project.getCreatedByInstitution());
         return summary;
     }
 
