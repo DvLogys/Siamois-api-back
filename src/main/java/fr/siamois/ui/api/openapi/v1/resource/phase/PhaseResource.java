@@ -1,6 +1,9 @@
 package fr.siamois.ui.api.openapi.v1.resource.phase;
 
+import fr.siamois.ui.api.openapi.v1.resource.concept.ResolvedConceptResource;
 import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -21,4 +24,28 @@ public class PhaseResource {
 
     @Schema(description = "Libellé d'affichage (titre ou identifiant)")
     private String label;
+
+    @Schema(description = "Description de la phase")
+    private String description;
+
+    @Schema(description = "Rang de la phase dans la chronologie du projet")
+    private Integer orderNumber;
+
+    @Schema(description = "Borne chronologique inférieure")
+    private Integer lowerBound;
+
+    @Schema(description = "Borne chronologique supérieure")
+    private Integer upperBound;
+
+    @Schema(description = "Identifiant du projet (action unit) portant la phase")
+    private Long projectId;
+
+    @Schema(description = "Type de phase")
+    private ResolvedConceptResource type;
+
+    @Schema(description = "Périodes chronologiques associées")
+    private List<ResolvedConceptResource> periods;
+
+    @Schema(description = "Mots-clés associés")
+    private List<ResolvedConceptResource> keywords;
 }
