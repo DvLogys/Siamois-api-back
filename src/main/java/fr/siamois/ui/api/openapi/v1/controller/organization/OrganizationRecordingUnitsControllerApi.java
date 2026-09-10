@@ -92,6 +92,10 @@ public class OrganizationRecordingUnitsControllerApi {
             @RequestParam(required = false) String sort,
             @Parameter(description = "Recherche libre sur l'identifiant complet")
             @RequestParam(required = false) String q,
+            @Parameter(description = "Ne renvoyer que les racines de la hiérarchie — le niveau haut d'un "
+                    + "affichage en arborescence, dont les niveaux suivants se chargent à l'ouverture "
+                    + "d'un nœud (filtre parents:<id>).")
+            @RequestParam(defaultValue = "false") boolean rootOnly,
             @Parameter(description = "Colonnes affichées, dont les réponses de formulaire sont à construire. "
                     + "Absent, aucune n'est construite : une liste qui ne sert qu'à naviguer n'en a pas besoin.")
             @RequestParam(required = false) List<String> columns,
@@ -106,6 +110,10 @@ public class OrganizationRecordingUnitsControllerApi {
         // Tri et filtres sont lus à travers la définition des colonnes du type : la liste n'accepte
         // donc que ce que cette définition annonce au client comme triable ou filtrable.
         FilterDTO filters = tableQueryApiService.filtersOf(PanelResourceTypes.RECORDING_UNIT, rawFilters(request));
+        // En arborescence, la liste ne rend que les racines. Combiné à une recherche, le service du
+        // domaine remonte aussi les ancêtres des lignes trouvées, pour que la branche qui mène à un
+        // résultat reste ouvrable — c'est le comportement de l'arbre JSF.
+        filters.setRootOnly(rootOnly);
         if (q != null && !q.isBlank()) {
             filters.add(RecordingUnitSpec.FULL_IDENTIFIER, q.trim(), FilterDTO.FilterType.CONTAINS);
         }
