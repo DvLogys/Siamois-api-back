@@ -19,7 +19,6 @@ import java.util.Map;
 @NoArgsConstructor
 public class ProjectResource extends ProjectResourceIdentifier {
 
-    @Schema(description = "Nom du projet")
     @Schema(description = "Valeurs de tous les champs du formulaire de la fiche, indexées par fieldId. "
             + "Chaque entrée embarque sa définition (libellé, type de réponse, aide).")
     private Map<String, FieldAnswer> answers;
@@ -27,6 +26,7 @@ public class ProjectResource extends ProjectResourceIdentifier {
     @Schema(description = "Sections, lignes et grille du formulaire — sans quoi les champs ne peuvent qu'être empilés")
     private List<FormLayoutPanelResource> layout;
 
+    @Schema(description = "Nom du projet")
     private String name;
 
     @Schema(description = "Identifiant complet du projet")
