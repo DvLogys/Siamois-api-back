@@ -5,6 +5,7 @@ import fr.siamois.domain.models.spatialunit.SpatialUnit;
 import fr.siamois.domain.models.vocabulary.Concept;
 import fr.siamois.dto.entity.SpatialUnitDTO;
 import fr.siamois.infrastructure.database.repositories.specs.SpatialUnitSpec;
+import fr.siamois.ui.table.TableDefinition;
 import fr.siamois.ui.table.column.CommandLinkColumn;
 import fr.siamois.ui.table.column.FormFieldColumn;
 import fr.siamois.ui.table.column.RelationColumn;
@@ -40,6 +41,21 @@ public final class SpatialUnitTableDefinitionFactory {
         if (tableModel == null) {
             return;
         }
+        applyTo(tableModel.getTableDefinition());
+    }
+
+    /**
+     * The columns of the table on their own, with no view model to apply them to.
+     *
+     * @return a fresh definition carrying the table's standard columns
+     */
+    public static TableDefinition definition() {
+        TableDefinition definition = new TableDefinition();
+        applyTo(definition);
+        return definition;
+    }
+
+    private static void applyTo(TableDefinition definition) {
 
         // uni category
         final Concept spatialUnitTypeConcept = new Concept.Builder()
@@ -63,7 +79,7 @@ public final class SpatialUnitTableDefinitionFactory {
         // -------------------------
         // Name / identifier link col
         // -------------------------
-        tableModel.getTableDefinition().setCommandLinkColumn(
+        definition.setCommandLinkColumn(
                 CommandLinkColumn.builder()
                         .id("identifierCol")
                         .headerKey("table.spatialunit.column.name")
@@ -87,7 +103,7 @@ public final class SpatialUnitTableDefinitionFactory {
                         .build()
         );
 
-        tableModel.getTableDefinition().addColumn(
+        definition.addColumn(
                 FormFieldColumn.builder()
                         .id("type")
                         .headerKey("spatialunit.field.type")
@@ -103,7 +119,7 @@ public final class SpatialUnitTableDefinitionFactory {
         // -------
         // Actions
         // -------
-        tableModel.getTableDefinition().addColumn(
+        definition.addColumn(
                 RelationColumn.builder()
                         .id("action")
                         .headerKey("table.spatialunit.column.actions")
@@ -133,7 +149,7 @@ public final class SpatialUnitTableDefinitionFactory {
         // -------------
         // Recording units
         // -------------
-        tableModel.getTableDefinition().addColumn(
+        definition.addColumn(
                 RelationColumn.builder()
                         .id("recording")
                         .headerKey("table.spatialunit.column.recordings")

@@ -77,6 +77,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Spy;
+import org.springframework.context.support.StaticMessageSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -141,6 +143,21 @@ class RecordingUnitOpenApiServiceTest {
     private PhaseMapper phaseMapper;
     @Mock
     private TableFieldConfigService tableFieldConfigService;
+
+    /**
+     * Vrai mapper plutôt qu'un mock : il n'a pas d'état, et un mock renverrait `null` là où le
+     * contrat de la ressource est une liste — ce que les tests de détail liraient comme une
+     * disposition absente.
+     */
+    @Spy
+    private FormLayoutApiMapper formLayoutApiMapper = new FormLayoutApiMapper(new LangService(new StaticMessageSource()));
+
+    /**
+     * Même raison : le mapper résout les libellés d'un champ, et un mock renverrait `null` là où
+     * les tests lisent le type de réponse et le code de vocabulaire de la définition.
+     */
+    @Spy
+    private FieldResourceApiMapper fieldResourceApiMapper = new FieldResourceApiMapper(new LangService(new StaticMessageSource()));
 
     @InjectMocks
     private RecordingUnitOpenApiService service;

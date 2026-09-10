@@ -6,6 +6,7 @@ import fr.siamois.domain.models.form.customfield.basetypes.CustomFieldText;
 import fr.siamois.domain.models.vocabulary.Concept;
 import fr.siamois.dto.entity.ActionUnitDTO;
 import fr.siamois.infrastructure.database.repositories.specs.ActionUnitSpec;
+import fr.siamois.ui.table.TableDefinition;
 import fr.siamois.ui.table.column.CommandLinkColumn;
 import fr.siamois.ui.table.column.FormFieldColumn;
 import fr.siamois.ui.table.column.RelationColumn;
@@ -37,6 +38,21 @@ public final class ActionUnitTableDefinitionFactory {
         if (tableModel == null) {
             return;
         }
+        applyTo(tableModel.getTableDefinition());
+    }
+
+    /**
+     * The columns of the table on their own, with no view model to apply them to.
+     *
+     * @return a fresh definition carrying the table's standard columns
+     */
+    public static TableDefinition definition() {
+        TableDefinition definition = new TableDefinition();
+        applyTo(definition);
+        return definition;
+    }
+
+    private static void applyTo(TableDefinition definition) {
 
         Concept nameConcept = new Concept.Builder()
                 .vocabulary(SYSTEM_THESO)
@@ -53,7 +69,7 @@ public final class ActionUnitTableDefinitionFactory {
         // -------------------------
         // Name / identifier link col
         // -------------------------
-        tableModel.getTableDefinition().setCommandLinkColumn(
+        definition.setCommandLinkColumn(
                 CommandLinkColumn.builder()
                         .id("identifierCol")
                         .headerKey("table.actionunit.column.identifier")
@@ -81,7 +97,7 @@ public final class ActionUnitTableDefinitionFactory {
                         .build()
         );
 
-        tableModel.getTableDefinition().addColumn(
+        definition.addColumn(
                 FormFieldColumn.builder()
                         .id("name")
                         .headerKey("spatialunit.field.name")
@@ -93,7 +109,7 @@ public final class ActionUnitTableDefinitionFactory {
                         .build()
         );
 
-        tableModel.getTableDefinition().addColumn(
+        definition.addColumn(
                 RelationColumn.builder()
                         .id("recording")
                         .headerKey("table.spatialunit.column.recordings")
@@ -126,7 +142,7 @@ public final class ActionUnitTableDefinitionFactory {
         // Visible by default: status, OA code, main location, opening rate, periods, subjects.
         // The rest is available but hidden by default (toggleable from the column picker).
         // -------------------------
-        TableDefinitions.addColumns(tableModel.getTableDefinition(),
+        TableDefinitions.addColumns(definition,
                 column("status", "actionunit.field.status", ActionUnitForm.STATUS_FIELD, true),
                 column("oaCode", "actionunit.field.oaCode", ActionUnitForm.OA_CODE_FIELD, true),
                 column("mainLocation", "common.label.mainLocation", ActionUnitForm.MAIN_LOCATION_FIELD, true),

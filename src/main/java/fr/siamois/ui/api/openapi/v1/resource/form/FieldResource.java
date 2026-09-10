@@ -27,6 +27,13 @@ public record FieldResource(
         @Nullable String valueBinding,
 
         @Schema(description = "Code de vocabulaire (ex. SIARU.CHRONO) pour les SELECT_*_FROM_FIELD_CODE")
-        @Nullable String fieldCode
+        @Nullable String fieldCode,
+
+        @Schema(description = "Classe CSS de la pastille affichant la valeur en lecture "
+                + "(ex. spatial-unit-type-chip), telle que le champ la déclare")
+        @Nullable String styleClass,
+
+        @Schema(description = "Icône du champ, affichée dans l'en-tête de sa colonne")
+        @Nullable String iconClass
 ) {
 }

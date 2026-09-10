@@ -3,6 +3,7 @@ package fr.siamois.ui.api.openapi.v1.resource.find;
 
 import fr.siamois.ui.api.openapi.v1.generic.response.geom.PointDTO;
 import fr.siamois.ui.api.openapi.v1.resource.concept.ResolvedConceptResource;
+import fr.siamois.ui.api.openapi.v1.resource.form.FormLayoutPanelResource;
 import fr.siamois.ui.api.openapi.v1.resource.form.FieldAnswer;
 import fr.siamois.ui.api.openapi.v1.resource.organization.OrganizationResourceIdentifier;
 import fr.siamois.ui.api.openapi.v1.resource.recordingunit.RecordingUnitResourceIdentifier;
@@ -13,6 +14,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.lang.Nullable;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -33,6 +35,9 @@ public class FindResource extends FindResourceIdentifier {
     @Schema(description = "Valeurs de tous les champs formulaire (système et custom), indexées par fieldId. "
             + "Chaque entrée embarque sa définition (label, answerType, hint, etc.).")
     private Map<String, FieldAnswer> answers;
+
+    @Schema(description = "Sections, lignes et grille du formulaire — sans quoi les champs ne peuvent qu'être empilés")
+    private List<FormLayoutPanelResource> layout;
 
 
 }

@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -73,6 +75,20 @@ public class RecordingUnitSortFilterService {
             FilterDTO.IntRange range = filters.valueAsIntRangeOf(column);
             return RecordingUnitSpec.integerFieldBetween(column, range.from(), range.to());
         });
+    }
+
+    /**
+     * Les colonnes que ce moteur sait filtrer, sous le nom qui les identifie dans un
+     * {@link FilterDTO} — c'est-à-dire le {@code valueBinding} du champ de la colonne.
+     *
+     * L'API lit cette liste pour n'annoncer filtrable, dans la définition d'un tableau, que ce
+     * qu'une requête saura effectivement restreindre : une colonne annoncée filtrable dont le
+     * filtre serait ignoré ferait passer une liste entière pour un résultat filtré.
+     *
+     * @return les noms de colonne filtrables
+     */
+    public static Set<String> supportedFilterColumns() {
+        return USER_FILTERS.stream().map(FilterBinding::column).collect(Collectors.toUnmodifiableSet());
     }
 
     static Specification<RecordingUnit> userFilterSpecs(@NonNull FilterDTO filters) {
@@ -160,6 +176,18 @@ public class RecordingUnitSortFilterService {
             RecordingUnitSpec.INTERPRETATION_LABEL_SORT, RecordingUnitSpec.INTERPRETATION_FILTER);
 
     private static final String DEFAULT_LANG = "fr";
+
+    /**
+     * Les clés de tri que ce service calcule lui-même — nombre d'entités liées, libellé d'un
+     * concept — plutôt que de les laisser au dépôt : elles ne correspondent à aucune propriété
+     * mappée, une requête les passerait telles quelles à JPA et échouerait.
+     *
+     * @return les noms de colonne triables par calcul
+     */
+    public static Set<String> supportedSyntheticSortColumns() {
+        return Stream.concat(COUNT_SORTS.keySet().stream(), CONCEPT_LABEL_SORTS.keySet().stream())
+                .collect(Collectors.toUnmodifiableSet());
+    }
 
     Specification<RecordingUnit> applySyntheticSort(Specification<RecordingUnit> specs, Sort sort) {
         for (Sort.Order order : sort) {

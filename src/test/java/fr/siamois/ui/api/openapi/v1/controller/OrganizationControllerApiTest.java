@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import fr.siamois.domain.models.auth.Person;
 import fr.siamois.domain.services.InstitutionService;
+import fr.siamois.domain.services.LangService;
 import fr.siamois.domain.services.PhaseService;
 import fr.siamois.domain.services.actionunit.ActionUnitService;
 import fr.siamois.domain.services.document.DocumentService;
@@ -37,16 +38,22 @@ import fr.siamois.ui.api.openapi.v1.resource.recordingunit.RecordingUnitResource
 import fr.siamois.ui.api.openapi.v1.response.spatialunit.PlaceListResponse;
 import fr.siamois.ui.api.openapi.v1.service.PlaceOpenApiService;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiService;
+import fr.siamois.ui.api.openapi.v1.service.FieldResourceApiMapper;
 import fr.siamois.ui.api.openapi.v1.service.RecordingUnitOpenApiService;
+import fr.siamois.ui.api.openapi.v1.service.TableAccessApiService;
+import fr.siamois.ui.api.openapi.v1.service.TableDefinitionApiService;
+import fr.siamois.ui.api.openapi.v1.service.TableQueryApiService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -61,6 +68,8 @@ import java.util.Set;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,6 +80,8 @@ class OrganizationControllerApiTest {
 
     @Mock
     private LabelService labelService;
+    @Mock
+    private LangService langService;
 
     @Mock
     private ActionUnitService actionUnitService;
@@ -146,10 +157,18 @@ class OrganizationControllerApiTest {
                 projectApiService,
                 new ProjectResponseMapper(labelService));
 
+        // Le tri et les filtres de la liste sont lus à travers la définition des colonnes du type,
+        // qui est du métadonnée en code : le vrai service, pas un mock.
+        TableDefinitionApiService tableDefinitionApiService =
+                new TableDefinitionApiService(langService, new FieldResourceApiMapper(langService));
         OrganizationRecordingUnitsControllerApi recordingUnitsController = new OrganizationRecordingUnitsControllerApi(
                 recordingUnitService,
                 recordingUnitResponseMapper,
-                projectApiService);
+                projectApiService,
+                new TableQueryApiService(tableDefinitionApiService),
+                new TableAccessApiService(profilePermissionService, langService),
+                tableDefinitionApiService,
+                recordingUnitOpenApiService);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller, placesController, projectsController, recordingUnitsController)
                 .setControllerAdvice(new RestExceptionHandler())
@@ -534,6 +553,82 @@ class OrganizationControllerApiTest {
                 .andExpect(header().string("X-Total-Count", "1"))
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.meta.total").value(1));
+    }
+
+    /** Prépare une organisation dans le périmètre de l'appelant, avec une liste d'UE vide. */
+    private ArgumentCaptor<FilterDTO> stubRecordingUnitSearch() {
+        login();
+        when(personMapper.convert(person)).thenReturn(personDto);
+
+        InstitutionDTO org = new InstitutionDTO();
+        org.setId(10L);
+        when(institutionService.findInstitutionsOfPerson(personDto)).thenReturn(Set.of(org));
+        when(recordingUnitService.searchRecordingUnit(any(InstitutionDTO.class), any(FilterDTO.class), any(Pageable.class), eq(false)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        return ArgumentCaptor.forClass(FilterDTO.class);
+    }
+
+    /**
+     * Une sélection multiple arrive en une valeur, identifiants séparés par des virgules. Déclarer
+     * le paramètre en {@code List<String>} la ferait découper par Spring sur ces mêmes virgules,
+     * et la seconde moitié serait lue comme un nom de colonne.
+     */
+    @Test
+    void getRecordingUnits_multiValueFilter_isNotSplitOnCommas() throws Exception {
+        ArgumentCaptor<FilterDTO> filters = stubRecordingUnitSearch();
+
+        mockMvc.perform(get("/api/v1/organizations/10/recording-units").param("filter", "type:192,193"))
+                .andExpect(status().isOk());
+
+        verify(recordingUnitService).searchRecordingUnit(any(InstitutionDTO.class), filters.capture(),
+                any(Pageable.class), eq(false));
+        assertThat(filters.getValue().valueAsIdListOf("type")).containsExactly(192L, 193L);
+    }
+
+    @Test
+    void getRecordingUnits_searchAndFilterReachTheSearchService() throws Exception {
+        ArgumentCaptor<FilterDTO> filters = stubRecordingUnitSearch();
+
+        mockMvc.perform(get("/api/v1/organizations/10/recording-units")
+                        .param("q", "BAT")
+                        .param("filter", "matrixColor:brun")
+                        .param("filter", "tpq:10..20"))
+                .andExpect(status().isOk());
+
+        verify(recordingUnitService).searchRecordingUnit(any(InstitutionDTO.class), filters.capture(),
+                any(Pageable.class), eq(false));
+        FilterDTO captured = filters.getValue();
+        assertThat(captured.valueOfAsString("fullIdentifier")).isEqualTo("BAT");
+        assertThat(captured.valueOfAsString("matrixColor")).isEqualTo("brun");
+        assertThat(captured.valueAsIntRangeOf("tpq").from()).isEqualTo(10);
+    }
+
+    @Test
+    void getRecordingUnits_announcedSortReachesTheRepository() throws Exception {
+        stubRecordingUnitSearch();
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+
+        mockMvc.perform(get("/api/v1/organizations/10/recording-units").param("sort", "fullIdentifier:asc"))
+                .andExpect(status().isOk());
+
+        verify(recordingUnitService).searchRecordingUnit(any(InstitutionDTO.class), any(FilterDTO.class),
+                pageable.capture(), eq(false));
+        assertThat(pageable.getValue().getSort()).containsExactly(Sort.Order.asc("fullIdentifier"));
+    }
+
+    @Test
+    void getRecordingUnits_filterOnAColumnTheListCannotRestrict_returns400() throws Exception {
+        // La requête est refusée avant toute recherche : rien à préparer côté service.
+        login();
+        when(personMapper.convert(person)).thenReturn(personDto);
+        InstitutionDTO org = new InstitutionDTO();
+        org.setId(10L);
+        when(institutionService.findInstitutionsOfPerson(personDto)).thenReturn(Set.of(org));
+
+        mockMvc.perform(get("/api/v1/organizations/10/recording-units").param("filter", "phases:3"))
+                .andExpect(status().isBadRequest());
+        verify(recordingUnitService, never())
+                .searchRecordingUnit(any(InstitutionDTO.class), any(FilterDTO.class), any(Pageable.class), eq(false));
     }
 
     @Test

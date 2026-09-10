@@ -53,17 +53,23 @@ public class ProjectApiService {
 
     public static final String CREATION_TIME = "creationTime";
     public static final String IDENTIFIER = "identifier";
-    private static final Set<String> ALLOWED_PROJECT_SORT_FIELDS = Set.of(
+    public static final Set<String> ALLOWED_PROJECT_SORT_FIELDS = Set.of(
             "name", IDENTIFIER, "fullIdentifier", CREATION_TIME
     );
 
-    private static final Set<String> ALLOWED_RECORDING_UNIT_SORT_FIELDS = Set.of(
-            CREATION_TIME, "id", IDENTIFIER, "fullIdentifier", "openingDate", "closingDate"
+    // Les colonnes que le tableau des UE déclare triables (voir RecordingUnitTableDefinitionFactory) :
+    // propriétés scalaires, et associations que le modèle paresseux du JSF trie par leur clé
+    // étrangère — l'ordre obtenu sur ces dernières est donc celui des identifiants, pas des
+    // libellés, exactement comme dans le JSF.
+    public static final Set<String> ALLOWED_RECORDING_UNIT_SORT_FIELDS = Set.of(
+            CREATION_TIME, "id", IDENTIFIER, "fullIdentifier", "openingDate", "closingDate",
+            "matrixColor", "tpq", "taq",
+            "type", "actionUnit", "spatialUnit", "author"
     );
 
-    private static final Set<String> ALLOWED_ORGANIZATION_SORT_FIELDS = Set.of("id", "name", IDENTIFIER, "creationDate");
+    public static final Set<String> ALLOWED_ORGANIZATION_SORT_FIELDS = Set.of("id", "name", IDENTIFIER, "creationDate");
 
-    private static final Set<String> ALLOWED_PLACE_SORT_FIELDS = Set.of("id", "name", "code", CREATION_TIME);
+    public static final Set<String> ALLOWED_PLACE_SORT_FIELDS = Set.of("id", "name", "code", CREATION_TIME);
 
     private final InstitutionService institutionService;
     private final ActionUnitService actionUnitService;

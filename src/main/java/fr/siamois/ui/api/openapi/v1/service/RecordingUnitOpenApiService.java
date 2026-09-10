@@ -75,9 +75,10 @@ import fr.siamois.ui.form.dto.FormUiDto;
 import fr.siamois.ui.form.dto.FormUiDtoLayoutJson;
 import fr.siamois.ui.form.fieldsource.FieldSource;
 import fr.siamois.ui.form.fieldsource.PanelFieldSource;
+import fr.siamois.ui.form.fieldsource.TableRowFieldSource;
+import fr.siamois.ui.table.TableDefinition;
 import fr.siamois.ui.viewmodel.CustomFormResponseViewModel;
 import fr.siamois.ui.viewmodel.fieldanswer.CustomFieldAnswerViewModel;
-import jakarta.persistence.DiscriminatorValue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.convert.ConversionService;
@@ -110,6 +111,8 @@ public class RecordingUnitOpenApiService {
     private final ConceptRepository conceptRepository;
     private final SpecimenService specimenService;
     private final LangService langService;
+    private final FormLayoutApiMapper formLayoutApiMapper;
+    private final FieldResourceApiMapper fieldResourceApiMapper;
     private final ActionUnitService actionUnitService;
     private final ProfilePermissionService profilePermissionService;
     private final PersonService personService;
@@ -152,17 +155,93 @@ public class RecordingUnitOpenApiService {
         Long projectId = dto.getActionUnit() != null ? dto.getActionUnit().getId() : null;
         UserInfo userInfo = new UserInfo(institution, personDto, lang);
         Locale locale = langService.localeForApiLang(lang);
-        Map<String, FieldAnswer> fields = OpenApiExecutionContext.callWithUserInfo(userInfo, () -> {
+        // Le formulaire effectif porte les réponses **et** leur disposition : les deux sont
+        // renvoyées, sinon le client perd les sections et ne peut qu'empiler les champs.
+        RecordingUnitForm form = OpenApiExecutionContext.callWithUserInfo(userInfo, () -> {
             FormUiDto formUiDto = effectiveFormResolver.resolveEffectiveForm(
                     RecordingUnit.DETAILS_FORM, projectId, ConfigurableTable.UE,
                     dto.getType() != null ? dto.getType().getId() : null);
             FieldSource fieldSource = new PanelFieldSource(formUiDto);
-            return buildFieldsWithFallback(dto, fieldSource, locale);
+            return new RecordingUnitForm(buildFieldsWithFallback(dto, fieldSource, locale), formUiDto);
         });
 
-        resource.setAnswers(fields);
+        resource.setAnswers(form.answers());
+        resource.setLayout(formLayoutApiMapper.toLayout(form.form(), locale));
         return resource;
     }
+
+    /**
+     * Les réponses de formulaire des lignes d'un tableau, limitées aux colonnes demandées.
+     *
+     * Sans elles une cellule n'a rien à éditer : le tableau du JSF construit un
+     * {@link EntityFormContext} par ligne, adossé à un {@link TableRowFieldSource} qui n'indexe que
+     * les champs de la définition des colonnes. C'est la même construction ici.
+     * <p>
+     * Le périmètre est celui des colonnes **affichées**, que l'appelant nomme : une définition d'UE
+     * en compte 27 dont 10 visibles par défaut, et construire les 27 pour chaque ligne d'une page
+     * de 100 revenait à envoyer une charge dont l'immense majorité n'était jamais lue. Un appelant
+     * qui ne nomme aucune colonne — l'aperçu latéral, qui ne se sert de la liste que pour ses
+     * flèches précédent/suivant — n'en paie aucune.
+     * <p>
+     * Le formulaire effectif ne dépend que du projet et du type de la ligne : il est résolu une fois
+     * par couple rencontré dans la page, non une fois par ligne.
+     *
+     * @param rows       les lignes de la page
+     * @param definition les colonnes du tableau
+     * @param columnIds  les colonnes affichées ; vide, aucune réponse n'est construite
+     * @param personDto  l'appelant
+     * @param lang       la langue des libellés
+     * @return les réponses par identifiant d'UE, vides pour une ligne hors institution
+     */
+    public Map<Long, Map<String, FieldAnswer>> buildTableAnswers(List<RecordingUnitDTO> rows,
+                                                                 TableDefinition definition,
+                                                                 Collection<String> columnIds,
+                                                                 PersonDTO personDto,
+                                                                 String lang) {
+        TableDefinition displayed = restrictToColumns(definition, columnIds);
+        if (displayed.getColumns().isEmpty()) {
+            return Map.of();
+        }
+        Locale locale = langService.localeForApiLang(lang);
+        Map<Long, Map<String, FieldAnswer>> answersByRow = new LinkedHashMap<>();
+        Map<List<Long>, FormUiDto> formsByScope = new HashMap<>();
+
+        for (RecordingUnitDTO dto : rows) {
+            InstitutionDTO institution = dto.getCreatedByInstitution();
+            if (dto.getId() == null || institution == null) {
+                continue;
+            }
+            Long projectId = dto.getActionUnit() != null ? dto.getActionUnit().getId() : null;
+            Long typeId = dto.getType() != null ? dto.getType().getId() : null;
+            UserInfo userInfo = new UserInfo(institution, personDto, lang);
+
+            Map<String, FieldAnswer> answers = OpenApiExecutionContext.callWithUserInfo(userInfo, () -> {
+                FormUiDto effectiveForm = formsByScope.computeIfAbsent(
+                        Arrays.asList(institution.getId(), projectId, typeId),
+                        scope -> effectiveFormResolver.resolveEffectiveForm(
+                                RecordingUnit.DETAILS_FORM, projectId, ConfigurableTable.UE, typeId));
+                return buildFieldsWithFallback(dto, new TableRowFieldSource(displayed, effectiveForm), locale);
+            });
+            answersByRow.put(dto.getId(), answers);
+        }
+        return answersByRow;
+    }
+
+    /** La définition réduite aux colonnes demandées, dans son ordre d'origine. */
+    private static TableDefinition restrictToColumns(TableDefinition definition, Collection<String> columnIds) {
+        if (columnIds == null || columnIds.isEmpty()) {
+            return new TableDefinition();
+        }
+        Set<String> wanted = Set.copyOf(columnIds);
+        TableDefinition restricted = new TableDefinition();
+        definition.getColumns().stream()
+                .filter(column -> wanted.contains(column.getId()))
+                .forEach(restricted::addColumn);
+        return restricted;
+    }
+
+    /** Réponses et disposition résolues ensemble, dans le même contexte utilisateur. */
+    private record RecordingUnitForm(Map<String, FieldAnswer> answers, FormUiDto form) {}
 
     private FieldAnswer toTypedAnswer(String answerType, FieldResource field, Object raw, String lang) {
         return switch (answerType) {
@@ -194,6 +273,12 @@ public class RecordingUnitOpenApiService {
             }
             case "SELECT_ONE_ACTION_UNIT" -> {
                 if (raw instanceof ActionUnitDTO a)
+                    yield new ResourceRef(String.valueOf(a.getId()), "action-units", a.getName());
+                // Les deux formes coexistent : une UE porte le résumé de son projet, jamais le DTO
+                // complet — sans ce cas, la cellule « Projet » restait vide alors que la ligne le
+                // connaît. Les deux classes descendent d'AbstractEntityDTO sans se dériver l'une
+                // l'autre, d'où le second test.
+                if (raw instanceof ActionUnitSummaryDTO a)
                     yield new ResourceRef(String.valueOf(a.getId()), "action-units", a.getName());
                 yield null;
             }
@@ -569,6 +654,8 @@ public class RecordingUnitOpenApiService {
                 userInfo, () -> buildSpecimenFieldsWithFallback(specimen, fieldSource, locale));
 
         resource.setAnswers(answers);
+        // Même disposition que pour l'UE : le mobilier passe par le même formulaire dynamique.
+        resource.setLayout(formLayoutApiMapper.toLayout(formUiDto, locale));
         return resource;
     }
 
@@ -637,23 +724,7 @@ public class RecordingUnitOpenApiService {
     }
 
     private FieldResource toFieldResource(CustomField field, Locale locale) {
-        String label = langService.resolveMessage(field.getLabel(), locale);
-        String hint = langService.resolveMessage(field.getHint(), locale);
-        String fieldCode = null;
-        if (field instanceof CustomFieldSelectOneFromFieldCode one) {
-            fieldCode = one.getFieldCode();
-        } else if (field instanceof CustomFieldSelectMultipleFromFieldCode multi) {
-            fieldCode = multi.getFieldCode();
-        }
-        return new FieldResource(
-                String.valueOf(field.getId()),
-                "fields",
-                label,
-                answerTypeDiscriminator(field),
-                hint,
-                field.getIsSystemField(),
-                field.getValueBinding(),
-                fieldCode);
+        return fieldResourceApiMapper.toFieldResource(field, locale);
     }
 
     private ResolvedConceptResource toConceptResource(ConceptDTO concept, String lang) {
@@ -666,8 +737,7 @@ public class RecordingUnitOpenApiService {
     }
 
     private static String answerTypeDiscriminator(CustomField field) {
-        DiscriminatorValue dv = field.getClass().getAnnotation(DiscriminatorValue.class);
-        return dv != null ? dv.value() : field.getClass().getSimpleName();
+        return FieldResourceApiMapper.answerTypeOf(field);
     }
 
     /**
