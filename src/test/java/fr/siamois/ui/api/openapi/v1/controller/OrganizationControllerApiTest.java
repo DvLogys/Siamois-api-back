@@ -22,6 +22,10 @@ import fr.siamois.ui.api.handler.RestExceptionHandler;
 import fr.siamois.ui.api.openapi.v1.controller.organization.OrganizationControllerApi;
 import fr.siamois.ui.api.openapi.v1.controller.organization.OrganizationPlacesControllerApi;
 import fr.siamois.ui.api.openapi.v1.controller.organization.OrganizationProjectsControllerApi;
+import fr.siamois.dto.api.AccessibleProjectForApi;
+import fr.siamois.dto.entity.ActionUnitDTO;
+import fr.siamois.domain.services.vocabulary.LabelService;
+import fr.siamois.ui.api.openapi.v1.mapper.ProjectResponseMapper;
 import fr.siamois.ui.api.openapi.v1.controller.organization.OrganizationRecordingUnitsControllerApi;
 import fr.siamois.ui.api.openapi.v1.generic.response.ListMeta;
 import fr.siamois.ui.api.openapi.v1.mapper.FindOpenApiMapper;
@@ -64,6 +68,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationControllerApiTest {
+
+    @Mock
+    private LabelService labelService;
 
     @Mock
     private ActionUnitService actionUnitService;
@@ -133,7 +140,11 @@ class OrganizationControllerApiTest {
                 projectApiService,
                 placeOpenApiService);
 
-        OrganizationProjectsControllerApi projectsController = new OrganizationProjectsControllerApi();
+        // Le contrôleur des projets n'est plus une souche : il pagine désormais les projets
+        // accessibles et résout les libellés de concept.
+        OrganizationProjectsControllerApi projectsController = new OrganizationProjectsControllerApi(
+                projectApiService,
+                new ProjectResponseMapper(labelService));
 
         OrganizationRecordingUnitsControllerApi recordingUnitsController = new OrganizationRecordingUnitsControllerApi(
                 recordingUnitService,
@@ -438,10 +449,38 @@ class OrganizationControllerApiTest {
     }
 
     @Test
-    void getProjects_returns501() throws Exception {
+    void getProjects_success() throws Exception {
         login();
+        when(personMapper.convert(person)).thenReturn(personDto);
+
+        InstitutionDTO org = new InstitutionDTO();
+        org.setId(10L);
+        when(institutionService.findInstitutionsOfPerson(personDto)).thenReturn(Set.of(org));
+
+        ActionUnitDTO project = new ActionUnitDTO();
+        project.setId(3L);
+        project.setName("Chantier A");
+        project.setIdentifier("CHA");
+        when(actionUnitService.findAccessibleProjects(eq(personDto.getId()), any(), eq(10L), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(new AccessibleProjectForApi(project, 4L, 0L))));
+
+        mockMvc.perform(get("/api/v1/organizations/10/projects"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].name").value("Chantier A"));
+    }
+
+    /** Le contrôle de périmètre vaut aussi pour cette sous-ressource. */
+    @Test
+    void getProjects_outOfCallerScope_returns403() throws Exception {
+        login();
+        when(personMapper.convert(person)).thenReturn(personDto);
+
+        InstitutionDTO org = new InstitutionDTO();
+        org.setId(10L);
+        when(institutionService.findInstitutionsOfPerson(personDto)).thenReturn(Set.of(org));
+
         mockMvc.perform(get("/api/v1/organizations/1/projects"))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isForbidden());
     }
 
     @Test
