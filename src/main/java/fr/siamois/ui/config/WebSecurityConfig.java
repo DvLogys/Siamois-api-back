@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -89,6 +90,12 @@ public class WebSecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/login").permitAll()
+                        // Appelés avant qu'un jeton existe : libellés de l'écran de connexion et
+                        // inscription sur invitation. Routes listées une par une — un motif large sur
+                        // /api/v1/auth/** ouvrirait aussi /api/v1/auth/me.
+                        .requestMatchers("/api/v1/i18n/languages", "/api/v1/i18n/messages").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/invitations/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/invitations/*").permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

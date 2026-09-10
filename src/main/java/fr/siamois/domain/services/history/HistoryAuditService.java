@@ -3,6 +3,7 @@ package fr.siamois.domain.services.history;
 import fr.siamois.domain.models.TraceableEntity;
 import fr.siamois.domain.models.auth.Person;
 import fr.siamois.domain.models.history.InfoRevisionEntity;
+import fr.siamois.domain.models.history.RevisionSummary;
 import fr.siamois.domain.models.history.RevisionWithInfo;
 import fr.siamois.domain.models.recordingunit.RecordingUnit;
 import fr.siamois.domain.services.EntityDTORegistry;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -75,6 +77,53 @@ public class HistoryAuditService {
         }
 
         return results;
+    }
+
+    /**
+     * Liste les révisions d'une entité en ne lisant que leurs métadonnées (numéro, date, type, auteur).
+     * Contrairement à {@link #findAllRevisionForEntity}, l'instantané n'est pas converti en DTO : la
+     * liste reste exploitable même sur des entités dont la conversion échouerait.
+     *
+     * @param dtoClass The class of the entity
+     * @param entityId The ID of the entity
+     * @return Les révisions, de la plus récente à la plus ancienne
+     * @param <D> The type of the entity
+     */
+    @Transactional(readOnly = true)
+    public <D extends AbstractEntityDTO,
+            E extends TraceableEntity> List<RevisionSummary> findRevisionSummariesForEntity(Class<D> dtoClass, Long entityId) {
+
+        Class<E> entityClass = registry.getEntityClass(dtoClass);
+
+        if (entityClass == null) {
+            throw new IllegalArgumentException("No JPA Entity mapped for DTO: " + dtoClass.getName());
+        }
+
+        List<Object[]> rows = auditReader.createQuery()
+                .forRevisionsOfEntity(entityClass, false, true)
+                .add(AuditEntity.id().eq(entityId))
+                .getResultList();
+
+        List<RevisionSummary> summaries = new ArrayList<>();
+        for (Object[] row : rows) {
+            InfoRevisionEntity revisionInfo = (InfoRevisionEntity) row[1];
+            Person author = revisionInfo.getUpdatedBy();
+            summaries.add(new RevisionSummary(
+                    revisionInfo.getRevId(),
+                    revisionInfo.getRevisionDate(),
+                    (RevisionType) row[2],
+                    author == null ? null : author.getId(),
+                    author == null ? null : authorDisplayName(author)));
+        }
+
+        summaries.sort(Comparator.comparingLong(RevisionSummary::revisionId).reversed());
+        return summaries;
+    }
+
+    private String authorDisplayName(Person author) {
+        String full = ((author.getName() == null ? "" : author.getName()) + " "
+                + (author.getLastname() == null ? "" : author.getLastname())).trim();
+        return full.isEmpty() ? author.getUsername() : full;
     }
 
     /**

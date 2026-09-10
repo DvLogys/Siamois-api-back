@@ -256,4 +256,79 @@ class JwtAuthenticationFilterTest {
         assertThat(res.getContentAsString()).contains("Invalid or expired token");
         assertThat(res.getContentAsString()).doesNotContain("sensitive detail");
     }
+
+    @Test
+    void i18nLanguagesPath_passesThroughWithoutParsingJwt() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/i18n/languages");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain).doFilter(req, res);
+        verify(jwtService, never()).parseAndValidateAccessToken(anyString());
+        assertThat(res.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void i18nMessagesPath_passesThroughWithoutParsingJwt() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/i18n/messages");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain).doFilter(req, res);
+        verify(jwtService, never()).parseAndValidateAccessToken(anyString());
+        assertThat(res.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void otherI18nPath_requiresJwt_notPublic() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/i18n/other");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain, never()).doFilter(req, res);
+        assertThat(res.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void invitationTokenPath_passesThroughWithoutParsingJwt() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/auth/invitations/tGkJ8p2LqR");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain).doFilter(req, res);
+        verify(jwtService, never()).parseAndValidateAccessToken(anyString());
+        assertThat(res.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void invitationPathWithoutToken_requiresJwt_notPublic() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/auth/invitations");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain, never()).doFilter(req, res);
+        assertThat(res.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void invitationNestedPath_requiresJwt_publicScopeIsOneSegmentOnly() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setServletPath("/api/v1/auth/invitations/tGkJ8p2LqR/members");
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(req, res, filterChain);
+
+        verify(filterChain, never()).doFilter(req, res);
+        assertThat(res.getStatus()).isEqualTo(401);
+    }
 }

@@ -29,12 +29,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     /**
-     * Hors JWT : uniquement la connexion (sans Bearer).
+     * Hors JWT : connexion, libellés de l'interface et inscription sur invitation — tous appelés avant
+     * qu'un access token existe. Doit rester aligné sur les {@code permitAll} de {@code WebSecurityConfig} :
+     * ce filtre s'exécute avant eux, une route publique oubliée ici répondrait 401 malgré son {@code permitAll}.
      * Tout le reste de {@code /api/v1/**} exige un en-tête {@code Authorization: Bearer} avec un access token valide.
      */
     private static final Set<String> PUBLIC_AUTH_PATHS = Set.of(
-            "/api/v1/auth/login"
+            "/api/v1/auth/login",
+            "/api/v1/i18n/languages",
+            "/api/v1/i18n/messages"
     );
+
+    /** Le jeton d'invitation est porté par le chemin : la comparaison se fait sur le préfixe. */
+    private static final String INVITATION_PATH_PREFIX = "/api/v1/auth/invitations/";
 
     private final JwtService jwtService;
     private final PersonRepository personRepository;
@@ -46,7 +53,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String path = normalizePath(request.getServletPath());
-        if (PUBLIC_AUTH_PATHS.contains(path)) {
+        if (isPublicPath(path)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -82,6 +89,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static void writeUnauthorized(HttpServletResponse response, String message) throws IOException {
         ApiUnauthorizedJsonWriter.write(response, message);
+    }
+
+    private static boolean isPublicPath(String path) {
+        if (PUBLIC_AUTH_PATHS.contains(path)) {
+            return true;
+        }
+        if (!path.startsWith(INVITATION_PATH_PREFIX)) {
+            return false;
+        }
+        // Un seul segment après le préfixe — le jeton. Même portée que le "/*" du permitAll correspondant.
+        String remainder = path.substring(INVITATION_PATH_PREFIX.length());
+        return !remainder.isEmpty() && remainder.indexOf('/') < 0;
     }
 
     /** Uniformise les chemins avec ou sans slash final (ex. {@code /api/v1/auth/login/}). */
