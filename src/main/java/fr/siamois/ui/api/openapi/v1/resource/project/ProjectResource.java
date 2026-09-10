@@ -6,17 +6,27 @@ import fr.siamois.ui.api.openapi.v1.resource.concept.ResolvedConceptResource;
 import fr.siamois.ui.api.openapi.v1.resource.organization.OrganizationResourceIdentifier;
 import fr.siamois.ui.api.openapi.v1.resource.place.PlaceLightResource;
 import io.swagger.v3.oas.annotations.media.Schema;
+import fr.siamois.ui.api.openapi.v1.resource.form.FieldAnswer;
+import fr.siamois.ui.api.openapi.v1.resource.form.FormLayoutPanelResource;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 public class ProjectResource extends ProjectResourceIdentifier {
 
     @Schema(description = "Nom du projet")
+    @Schema(description = "Valeurs de tous les champs du formulaire de la fiche, indexées par fieldId. "
+            + "Chaque entrée embarque sa définition (libellé, type de réponse, aide).")
+    private Map<String, FieldAnswer> answers;
+
+    @Schema(description = "Sections, lignes et grille du formulaire — sans quoi les champs ne peuvent qu'être empilés")
+    private List<FormLayoutPanelResource> layout;
+
     private String name;
 
     @Schema(description = "Identifiant complet du projet")
