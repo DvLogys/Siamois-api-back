@@ -28,7 +28,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/siamois
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      CONTEXT_PATH:
+      CONTEXT_PATH: /
       SIAMOIS_ADMIN_LOGIN:
       SIAMOIS_ADMIN_PASSWORD:
       SIAMOIS_ADMIN_EMAIL:
