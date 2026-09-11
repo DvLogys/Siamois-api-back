@@ -1,7 +1,6 @@
 services:
-  postgres:
+  postgres-serv:
     image: postgis/postgis
-    container_name: shop-postgres
     environment:
       POSTGRES_DB: siamois
       POSTGRES_USER: ${POSTGRES_USER}
@@ -23,7 +22,7 @@ services:
       CONTEXT_PATH: /api
       DEFAULT_LANG: fr
       SIAMOIS_DOCUMENTS_PATH: /srv/files
-      DB_URL: jdbc:postgresql://postgres:5432/siamois
+      DB_URL: jdbc:postgresql://postgres/siamois
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       SIAMOIS_ADMIN_LOGIN:
