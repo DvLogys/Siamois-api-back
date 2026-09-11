@@ -23,7 +23,6 @@ services:
       - siamo-api
     environment:
       SIAMOIS_PORT: 8099
-      CONTEXT_PATH: /api
       DEFAULT_LANG: fr
       SIAMOIS_DOCUMENTS_PATH: /srv/files
       DB_URL: jdbc:postgresql://postgres:5432/siamois
