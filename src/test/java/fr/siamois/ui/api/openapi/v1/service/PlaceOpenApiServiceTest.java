@@ -5,6 +5,8 @@ import fr.siamois.domain.models.exceptions.spatialunit.SpatialUnitAlreadyExistsE
 import fr.siamois.domain.models.exceptions.spatialunit.SpatialUnitNotFoundException;
 import fr.siamois.domain.models.permissions.PermissionConstants;
 import fr.siamois.domain.models.vocabulary.Concept;
+import fr.siamois.domain.services.form.FormService;
+import fr.siamois.domain.services.LangService;
 import fr.siamois.domain.services.InstitutionService;
 import fr.siamois.domain.services.permissions.ProfilePermissionService;
 import fr.siamois.domain.services.spatialunit.SpatialUnitService;
@@ -61,6 +63,16 @@ class PlaceOpenApiServiceTest {
     private ProfilePermissionService profilePermissionService;
     @Mock
     private PlaceOpenApiMapper placeOpenApiMapper;
+    @Mock
+    private FormAnswerApiService formAnswerApiService;
+    @Mock
+    private FormLayoutApiMapper formLayoutApiMapper;
+    @Mock
+    private LangService langService;
+    @Mock
+    private FormAnswerWriteApiService formAnswerWriteApiService;
+    @Mock
+    private FormService formService;
 
     private PlaceOpenApiService service;
     private ProjectApiCaller caller;
@@ -76,7 +88,12 @@ class PlaceOpenApiServiceTest {
                 conceptService,
                 conceptMapper,
                 profilePermissionService,
-                placeOpenApiMapper);
+                placeOpenApiMapper,
+                formAnswerApiService,
+                formLayoutApiMapper,
+                langService,
+                formAnswerWriteApiService,
+                formService);
 
         personDto = new PersonDTO();
         personDto.setId(1L);

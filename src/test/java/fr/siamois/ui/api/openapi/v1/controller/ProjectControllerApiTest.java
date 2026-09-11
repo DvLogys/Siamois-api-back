@@ -38,6 +38,7 @@ import fr.siamois.ui.api.openapi.v1.resource.project.ProjectResource;
 import fr.siamois.ui.api.openapi.v1.resource.recordingunit.RecordingUnitResource;
 import fr.siamois.ui.api.openapi.v1.service.DocumentWriteOpenApiService;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiService;
+import fr.siamois.ui.api.openapi.v1.service.ProjectFormApiService;
 import fr.siamois.ui.api.openapi.v1.service.RecordingUnitOpenApiService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -119,6 +120,8 @@ class ProjectControllerApiTest {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         MappingJackson2HttpMessageConverter jsonConverter = new MappingJackson2HttpMessageConverter(objectMapper);
 
+        // Le formulaire de la fiche n'est pas l'objet de ce test : un mock suffit.
+        ProjectFormApiService projectFormApiService = org.mockito.Mockito.mock(ProjectFormApiService.class);
         ProjectApiService projectApiService = new ProjectApiService(
                 institutionService,
                 actionUnitService,
@@ -136,6 +139,7 @@ class ProjectControllerApiTest {
                 phaseService);
         ProjectControllerApi controller = new ProjectControllerApi(
                 projectApiService,
+                projectFormApiService,
                 projectResponseMapper,
                 recordingUnitResourceMapper,
                 recordingUnitOpenApiService,

@@ -19,6 +19,18 @@ import fr.siamois.ui.api.openapi.v1.request.place.PlaceCreateRequest;
 import fr.siamois.ui.api.openapi.v1.request.place.PlacePatchRequest;
 import fr.siamois.ui.api.openapi.v1.response.place.PlaceCreatedResponse;
 import fr.siamois.ui.api.openapi.v1.response.spatialunit.PlaceListResponse;
+import fr.siamois.domain.models.form.customform.CustomFormComposer;
+import fr.siamois.domain.models.spatialunit.SpatialUnit;
+import fr.siamois.domain.services.LangService;
+import fr.siamois.domain.services.form.FormService;
+import fr.siamois.ui.form.dto.FormUiDto;
+import fr.siamois.ui.form.fieldsource.FieldSource;
+import fr.siamois.ui.form.fieldsource.PanelFieldSource;
+import fr.siamois.ui.viewmodel.CustomFormResponseViewModel;
+import java.util.Locale;
+import java.util.Map;
+import fr.siamois.ui.api.openapi.v1.resource.place.PlaceResource;
+import fr.siamois.ui.api.openapi.v1.OpenApiExecutionContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -38,6 +50,11 @@ public class PlaceOpenApiService {
     private final ConceptMapper conceptMapper;
     private final ProfilePermissionService profilePermissionService;
     private final PlaceOpenApiMapper placeOpenApiMapper;
+    private final FormAnswerApiService formAnswerApiService;
+    private final FormLayoutApiMapper formLayoutApiMapper;
+    private final LangService langService;
+    private final FormAnswerWriteApiService formAnswerWriteApiService;
+    private final FormService formService;
 
     @Transactional(readOnly = true)
     public PlaceListResponse listByOrganization(ProjectApiCaller caller,
@@ -161,6 +178,68 @@ public class PlaceOpenApiService {
         } catch (SpatialUnitNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lieu introuvable");
         }
+    }
+
+    /**
+     * La fiche d'un lieu, formulaire compris.
+     *
+     * Un lieu se décrit par le même formulaire dynamique qu'une UE — {@code SpatialUnit.DETAILS_FORM},
+     * que {@code SpatialUnitPanel} rend côté JSF. La fiche porte donc ses réponses et la disposition
+     * de ses sections, sans quoi le client ne pourrait qu'empiler des valeurs en lecture.
+     *
+     * @param caller  l'appelant
+     * @param placeId le lieu demandé
+     * @param lang    la langue des libellés
+     * @return la fiche du lieu
+     */
+    @Transactional(readOnly = true)
+    public PlaceResource getPlace(ProjectApiCaller caller, long placeId, String lang) {
+        SpatialUnitDTO dto = requireAccessiblePlace(caller, placeId);
+        PlaceResource resource = placeOpenApiMapper.toResource(dto, lang);
+
+        Locale locale = langService.localeForApiLang(lang);
+        UserInfo userInfo = new UserInfo(dto.getCreatedByInstitution(), caller.person(), lang);
+        // Le formulaire est résolu dans le contexte de l'appelant : les libellés et les valeurs de
+        // vocabulaire en dépendent.
+        OpenApiExecutionContext.runWithUserInfo(userInfo, () -> {
+            FormUiDto form = CustomFormComposer.deepCopy(SpatialUnit.DETAILS_FORM);
+            resource.setAnswers(formAnswerApiService.buildAnswers(dto, new PanelFieldSource(form), locale));
+            resource.setLayout(formLayoutApiMapper.toLayout(form, locale));
+        });
+        return resource;
+    }
+
+    /**
+     * Enregistre les réponses de formulaire d'un lieu.
+     *
+     * Même chemin que pour une UE : les valeurs reçues sont converties selon le type de leur champ,
+     * posées sur les réponses de la fiche, puis répercutées sur l'entité avant sauvegarde.
+     *
+     * @param caller  l'appelant
+     * @param placeId le lieu modifié
+     * @param answers les valeurs reçues, indexées par identifiant de champ
+     * @param lang    la langue des libellés
+     * @return la fiche relue
+     */
+    @Transactional
+    public PlaceResource patchPlaceAnswers(ProjectApiCaller caller, long placeId,
+                                           Map<String, Object> answers, String lang) {
+        SpatialUnitDTO dto = requireAccessiblePlace(caller, placeId);
+        requirePlaceWritePermission(caller, dto, lang, "Modification de lieu non autorisée");
+        if (answers == null || answers.isEmpty()) {
+            return getPlace(caller, placeId, lang);
+        }
+
+        UserInfo userInfo = new UserInfo(dto.getCreatedByInstitution(), caller.person(), lang);
+        OpenApiExecutionContext.runWithUserInfo(userInfo, () -> {
+            FormUiDto form = CustomFormComposer.deepCopy(SpatialUnit.DETAILS_FORM);
+            FieldSource fieldSource = new PanelFieldSource(form);
+            CustomFormResponseViewModel response = formService.initOrReuseResponse(null, dto, fieldSource, true);
+            formAnswerWriteApiService.applyAnswers(response, fieldSource, answers);
+            formService.updateJpaEntityFromResponse(response, dto);
+            spatialUnitService.save(dto);
+        });
+        return getPlace(caller, placeId, lang);
     }
 
     private SpatialUnitDTO requireAccessiblePlace(ProjectApiCaller caller, long placeId) {

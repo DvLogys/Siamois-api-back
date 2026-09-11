@@ -13,7 +13,10 @@ import fr.siamois.ui.api.openapi.v1.response.project.ProjectListResponse;
 import fr.siamois.ui.api.openapi.v1.response.project.ProjectResponse;
 import fr.siamois.ui.api.openapi.v1.service.DocumentWriteOpenApiService;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiCaller;
+import fr.siamois.ui.api.openapi.v1.request.project.ProjectAnswersPatchRequest;
+import fr.siamois.ui.api.openapi.v1.resource.project.ProjectResource;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiService;
+import fr.siamois.ui.api.openapi.v1.service.ProjectFormApiService;
 import fr.siamois.ui.api.openapi.v1.service.RecordingUnitOpenApiService;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +43,7 @@ import java.util.List;
 public class ProjectControllerApi {
 
     private final ProjectApiService projectApiService;
+    private final ProjectFormApiService projectFormApiService;
     private final ProjectResponseMapper projectResponseMapper;
     private final RecordingUnitResponseMapper recordingUnitResourceMapper;
     private final RecordingUnitOpenApiService recordingUnitOpenApiService;
@@ -95,7 +99,31 @@ public class ProjectControllerApi {
         ProjectApiCaller caller = projectApiService.requireCaller();
         AccessibleProjectForApi row = projectApiService.requireAccessibleProject(caller, id);
         String lang = ProjectApiService.primaryAcceptLanguage(acceptLanguage);
-        return ResponseEntity.ok(new ProjectResponse(projectResponseMapper.toResource(row, lang)));
+        ProjectResource resource = projectResponseMapper.toResource(row, lang);
+        // Un projet se décrit par le même formulaire dynamique qu'une UE : la fiche le porte.
+        projectFormApiService.attachForm(resource, row.actionUnit(), caller, lang);
+        return ResponseEntity.ok(new ProjectResponse(resource));
+    }
+
+    /**
+     * Enregistre les réponses du formulaire de la fiche. Distinct du PATCH qui porte les champs
+     * propres du projet (nom, identifiant, dates) : celui-ci suit le formulaire dynamique.
+     */
+    @PatchMapping(value = "/{id}/answers", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ProjectResponse> patchAnswers(
+            @PathVariable("id") String id,
+            @RequestBody ProjectAnswersPatchRequest request,
+            @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+
+        ProjectApiCaller caller = projectApiService.requireCaller();
+        AccessibleProjectForApi row = projectApiService.requireAccessibleProject(caller, id);
+        String lang = ProjectApiService.primaryAcceptLanguage(acceptLanguage);
+        projectFormApiService.saveAnswers(caller, row.actionUnit(), request.getAnswers(), lang);
+
+        AccessibleProjectForApi saved = projectApiService.requireAccessibleProject(caller, id);
+        ProjectResource resource = projectResponseMapper.toResource(saved, lang);
+        projectFormApiService.attachForm(resource, saved.actionUnit(), caller, lang);
+        return ResponseEntity.ok(new ProjectResponse(resource));
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)

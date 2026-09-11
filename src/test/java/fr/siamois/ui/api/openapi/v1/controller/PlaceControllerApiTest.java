@@ -10,6 +10,7 @@ import fr.siamois.ui.api.openapi.v1.service.PlaceOpenApiService;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiCaller;
 import fr.siamois.ui.api.openapi.v1.service.ProjectApiService;
 import org.junit.jupiter.api.BeforeEach;
+import fr.siamois.ui.api.openapi.v1.resource.place.PlaceResource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -147,10 +148,16 @@ class PlaceControllerApiTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /** La fiche d'un lieu n'est plus une souche : elle rend le lieu et son formulaire. */
     @Test
-    void getById_notImplemented_returns501() throws Exception {
+    void getById_returnsPlace() throws Exception {
+        PlaceResource resource = new PlaceResource();
+        resource.setName("Chartres");
+        when(placeOpenApiService.getPlace(any(), eq(5L), any())).thenReturn(resource);
+
         mockMvc.perform(get("/api/v1/places/5"))
-                .andExpect(status().isNotImplemented());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Chartres"));
     }
 
     @Test

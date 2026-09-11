@@ -2,6 +2,7 @@ package fr.siamois.ui.api.openapi.v1.controller.place;
 
 import fr.siamois.ui.api.openapi.v1.OpenApiTags;
 import fr.siamois.ui.api.openapi.v1.request.place.PlaceCreateRequest;
+import fr.siamois.ui.api.openapi.v1.request.place.PlaceAnswersPatchRequest;
 import fr.siamois.ui.api.openapi.v1.request.place.PlacePatchRequest;
 import fr.siamois.ui.api.openapi.v1.response.find.FindListResponse;
 import fr.siamois.ui.api.openapi.v1.response.place.PlaceCreatedResponse;
@@ -118,8 +119,30 @@ public class PlaceControllerApi {
             @ApiResponse(responseCode = "500", description = "Erreur interne")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<PlaceResponse> getById(@PathVariable Long id) {
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "Not implemented yet");
+    public ResponseEntity<PlaceResponse> getById(
+            @PathVariable Long id,
+            @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+
+        ProjectApiCaller caller = projectApiService.requireCaller();
+        String lang = ProjectApiService.primaryAcceptLanguage(acceptLanguage);
+        return ResponseEntity.ok(new PlaceResponse(placeOpenApiService.getPlace(caller, id, lang)));
+    }
+
+    /**
+     * Enregistre les réponses du formulaire de la fiche. Distinct du PATCH ci-dessus, qui porte les
+     * champs propres du lieu (nom, catégorie, adresse) : celui-ci suit le formulaire dynamique, le
+     * même que celui de l'UE.
+     */
+    @PatchMapping(value = "/{id}/answers", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<PlaceResponse> patchAnswers(
+            @PathVariable Long id,
+            @RequestBody PlaceAnswersPatchRequest request,
+            @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String acceptLanguage) {
+
+        ProjectApiCaller caller = projectApiService.requireCaller();
+        String lang = ProjectApiService.primaryAcceptLanguage(acceptLanguage);
+        return ResponseEntity.ok(new PlaceResponse(
+                placeOpenApiService.patchPlaceAnswers(caller, id, request.getAnswers(), lang)));
     }
 
     @Hidden
