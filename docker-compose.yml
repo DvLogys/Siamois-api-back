@@ -1,5 +1,5 @@
 services:
-  postgres-serv:
+  postgres:
     image: postgis/postgis
     environment:
       POSTGRES_DB: siamois
