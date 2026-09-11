@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgis/postgis
+    networks:
+      - siamo-api
     environment:
       POSTGRES_DB: siamois
       POSTGRES_USER: ${POSTGRES_USER}
@@ -10,8 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data_2:/data/postgres
-    networks:
-      - siamo-api
 
   siamois:
     build:
@@ -19,12 +19,14 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - postgres
+    networks:
+      - siamo-api
     environment:
       SIAMOIS_PORT: 8099
       CONTEXT_PATH: /api
       DEFAULT_LANG: fr
       SIAMOIS_DOCUMENTS_PATH: /srv/files
-      DB_URL: jdbc:postgresql://postgres/siamois
+      DB_URL: jdbc:postgresql://postgres:5432/siamois
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       SIAMOIS_ADMIN_LOGIN:
@@ -41,8 +43,7 @@ services:
       - "9012:8099"
     volumes:
       - siamois_files:/srv/files
-    networks:
-      - siamo-api
+
 
 networks:
   siamo-api:
