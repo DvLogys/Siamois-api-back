@@ -17,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      - postgres
     environment:
       SIAMOIS_PORT: 8099
       CONTEXT_PATH: /api
