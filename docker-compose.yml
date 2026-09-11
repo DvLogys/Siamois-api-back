@@ -6,10 +6,8 @@ services:
       POSTGRES_DB: siamois
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql
+      - postgres_data_2:/var/lib/postgresql
     networks:
       - siamo-api
 
@@ -48,5 +46,5 @@ networks:
   siamo-api:
 
 volumes:
-  postgres_data:
+  postgres_data_2:
   siamois_files:
