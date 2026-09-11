@@ -1,13 +1,14 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgis/postgis
     container_name: shop-postgres
     environment:
       POSTGRES_DB: siamois
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /data/postgres
     volumes:
-      - postgres_data_2:/var/lib/postgresql
+      - postgres_data_2:/data/postgres
     networks:
       - siamo-api
 
